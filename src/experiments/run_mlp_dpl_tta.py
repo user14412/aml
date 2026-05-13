@@ -50,6 +50,7 @@ DEFAULT_DPL_CONFIG = {
     "anchor_weight": 1.0,
     "update_scope": "head_bn_affine",
     "max_pseudo_samples": None,
+    "pseudo_label_strategy": "distribution_guided",
 }
 
 
@@ -91,6 +92,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tta-beta", type=float, default=None)
     parser.add_argument("--tta-prior-shift-threshold", type=float, default=None)
     parser.add_argument("--tta-anchor-weight", type=float, default=None)
+    parser.add_argument(
+        "--tta-pseudo-label-strategy",
+        type=str,
+        default=None,
+        choices=["distribution_guided", "confidence"],
+        help=(
+            "distribution_guided uses the estimated target prior to balance pseudo labels; "
+            "confidence is the vanilla threshold-only pseudo-label ablation."
+        ),
+    )
     parser.add_argument(
         "--tta-update-scope",
         type=str,
@@ -204,6 +215,7 @@ def resolve_tta_config(config: dict[str, Any], args: argparse.Namespace) -> DPLT
         "anchor_weight": args.tta_anchor_weight,
         "update_scope": args.tta_update_scope,
         "max_pseudo_samples": args.tta_max_pseudo_samples,
+        "pseudo_label_strategy": args.tta_pseudo_label_strategy,
     }
     for key, value in overrides.items():
         if value is not None:
@@ -358,6 +370,7 @@ def run_one_dataset_seed(
     row["tta_prior_shift_threshold"] = tta_config.prior_shift_threshold
     row["tta_anchor_weight"] = tta_config.anchor_weight
     row["tta_adapt_steps"] = tta_config.adapt_steps
+    row["tta_pseudo_label_strategy"] = tta_config.pseudo_label_strategy
     return row
 
 

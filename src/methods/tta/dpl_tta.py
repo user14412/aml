@@ -19,6 +19,7 @@ class DPLTTAConfig:
     anchor_weight: float
     update_scope: str = "head_bn_affine"
     max_pseudo_samples: int | None = None
+    pseudo_label_strategy: str = "distribution_guided"
 
 
 @dataclass(frozen=True)
@@ -236,18 +237,25 @@ def build_distribution_guided_pseudo_set(
             num_pseudo_neg=0,
         )
 
-    desired_total = num_confident
-    if config.max_pseudo_samples is not None:
-        desired_total = min(desired_total, config.max_pseudo_samples)
-    desired_pos = int(round(target_prior * desired_total))
-    desired_pos = min(max(desired_pos, 0), desired_total)
-    desired_neg = desired_total - desired_pos
-
     pos_candidates = torch.nonzero(probabilities >= config.confidence_threshold, as_tuple=False).reshape(-1)
     neg_candidates = torch.nonzero(probabilities <= 1.0 - config.confidence_threshold, as_tuple=False).reshape(-1)
 
-    pos_indices = _topk_indices(pos_candidates, probabilities, desired_pos, largest=True)
-    neg_indices = _topk_indices(neg_candidates, probabilities, desired_neg, largest=False)
+    if config.pseudo_label_strategy == "confidence":
+        pos_indices, neg_indices = _confidence_pseudo_indices(
+            pos_candidates=pos_candidates,
+            neg_candidates=neg_candidates,
+            probabilities=probabilities,
+            max_pseudo_samples=config.max_pseudo_samples,
+        )
+    else:
+        desired_total = num_confident
+        if config.max_pseudo_samples is not None:
+            desired_total = min(desired_total, config.max_pseudo_samples)
+        desired_pos = int(round(target_prior * desired_total))
+        desired_pos = min(max(desired_pos, 0), desired_total)
+        desired_neg = desired_total - desired_pos
+        pos_indices = _topk_indices(pos_candidates, probabilities, desired_pos, largest=True)
+        neg_indices = _topk_indices(neg_candidates, probabilities, desired_neg, largest=False)
 
     selected_indices = []
     selected_labels = []
@@ -376,6 +384,10 @@ def _validate_config(config: DPLTTAConfig) -> None:
         raise ValueError("prior_shift_threshold must be non-negative.")
     if config.anchor_weight < 0.0:
         raise ValueError("anchor_weight must be non-negative.")
+    if config.pseudo_label_strategy not in {"distribution_guided", "confidence"}:
+        raise ValueError(
+            "pseudo_label_strategy must be one of: distribution_guided, confidence."
+        )
 
 
 def _clone_trainable_state(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -415,6 +427,30 @@ def _topk_indices(
     candidate_scores = probabilities[candidates]
     order = torch.argsort(candidate_scores, descending=largest)
     return candidates[order[:count]].to(dtype=torch.long)
+
+
+def _confidence_pseudo_indices(
+    *,
+    pos_candidates: torch.Tensor,
+    neg_candidates: torch.Tensor,
+    probabilities: torch.Tensor,
+    max_pseudo_samples: int | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if max_pseudo_samples is None:
+        return pos_candidates.to(dtype=torch.long), neg_candidates.to(dtype=torch.long)
+
+    selected = torch.cat([pos_candidates, neg_candidates])
+    if selected.numel() <= max_pseudo_samples:
+        return pos_candidates.to(dtype=torch.long), neg_candidates.to(dtype=torch.long)
+
+    confidence_scores = torch.maximum(probabilities[selected], 1.0 - probabilities[selected])
+    order = torch.argsort(confidence_scores, descending=True)
+    selected = selected[order[:max_pseudo_samples]].to(dtype=torch.long)
+    selected_probs = probabilities[selected]
+    return (
+        selected[selected_probs >= 0.5].to(dtype=torch.long),
+        selected[selected_probs < 0.5].to(dtype=torch.long),
+    )
 
 
 def _clip_prior(value: float, eps: float = 1e-4) -> float:

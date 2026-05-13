@@ -107,7 +107,8 @@
       "prior_shift_threshold": 0.03,
       "anchor_weight": 1.0,
       "update_scope": "head_bn_affine",
-      "max_pseudo_samples": null
+      "max_pseudo_samples": null,
+      "pseudo_label_strategy": "distribution_guided"
     }
   },
   "seeds": [42, 3407, 2004]
