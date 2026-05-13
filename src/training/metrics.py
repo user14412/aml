@@ -23,7 +23,6 @@ def compute_binary_metrics(
     probabilities: np.ndarray,
     threshold: float = 0.5,
 ) -> BinaryMetrics:
-    """工具函数：计算老师要求的3个指标"""
     y_true = np.asarray(y_true).astype(int).reshape(-1)
     y_pred = (np.asarray(probabilities).reshape(-1) >= threshold).astype(int)
 

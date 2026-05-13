@@ -3,6 +3,7 @@ import csv
 import sys
 from datetime import datetime
 from pathlib import Path
+from logging import Logger
 from statistics import mean, stdev
 
 import torch
@@ -18,6 +19,7 @@ from src.models.mlp import MLP
 from src.training.evaluator import evaluate_binary_classifier
 from src.training.trainer import TrainingConfig, make_loader, train_erm
 from src.utils.io import dump_json, ensure_dir, load_json
+from src.utils.logger import setup_logger
 from src.utils.seed import set_seed
 
 
@@ -34,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--refresh-cache", action="store_true")
     parser.add_argument("--prepare-cache-only", action="store_true")
+    parser.add_argument("--log-every", type=int, default=None, help="Log training progress every N epochs.")
     return parser.parse_args()
 
 
@@ -46,6 +49,8 @@ def main() -> None:
         training_config["epochs"] = args.epochs
     if args.batch_size is not None:
         training_config["batch_size"] = args.batch_size
+    if args.log_every is not None:
+        training_config["log_every"] = args.log_every
 
     seeds = args.seeds if args.seeds is not None else config["seeds"]
     datasets = resolve_datasets(args, config)
@@ -57,8 +62,11 @@ def main() -> None:
 
     run_name = args.run_name or datetime.now().strftime("erm_mlp_%Y%m%d_%H%M%S")
     output_root = PROJECT_ROOT / config["output_root"]
+    checkpoint_root = PROJECT_ROOT / config.get("checkpoint_root", "outputs/checkpoints")
     run_dir = ensure_dir(output_root / "runs" / run_name)
     results_dir = ensure_dir(output_root / "results")
+    checkpoint_dir = ensure_dir(checkpoint_root / run_name)
+    logger = setup_logger(run_dir / "train.log")
 
     effective_config = {
         **config,
@@ -75,10 +83,11 @@ def main() -> None:
     }
     dump_json(effective_config, run_dir / "config.json")
 
-    print(f"Running ERM-MLP on {len(datasets)} dataset(s), seeds={seeds}, device={device}", flush=True)
+    logger.info("Log file: %s", run_dir / "train.log")
+    logger.info("Running ERM-MLP on %d dataset(s), seeds=%s, device=%s", len(datasets), seeds, device)
     rows = []
     for dataset_name in datasets:
-        print(f"Preparing {dataset_name}...", flush=True)
+        logger.info("Preparing %s...", dataset_name)
         data_root = PROJECT_ROOT / config["data_root"]
         arrays, cache_status = load_or_prepare_tableshift_arrays(
             data_root=data_root,
@@ -87,12 +96,13 @@ def main() -> None:
             use_cache=cache_enabled,
             refresh_cache=args.refresh_cache,
         )
-        print(f"Prepared {dataset_name}: {cache_status}", flush=True)
+        logger.info("Prepared %s: %s", dataset_name, cache_status)
 
         if args.prepare_cache_only:
             continue
 
         for seed in seeds:
+            logger.info("Start training dataset=%s seed=%s", dataset_name, seed)
             row = run_one_dataset_seed(
                 dataset_name=dataset_name,
                 seed=seed,
@@ -100,20 +110,22 @@ def main() -> None:
                 config=effective_config,
                 training_config=TrainingConfig(**training_config),
                 device=device,
+                checkpoint_dir=checkpoint_dir,
+                logger=logger,
             )
             rows.append(row)
-            print(format_row(row), flush=True)
+            logger.info(format_row(row))
 
     if args.prepare_cache_only:
-        print(f"Prepared caches in: {cache_dir}", flush=True)
+        logger.info("Prepared caches in: %s", cache_dir)
         return
 
     raw_path = results_dir / f"{run_name}_raw.csv"
     summary_path = results_dir / f"{run_name}_summary.csv"
     write_csv(rows, raw_path)
     write_csv(summarize_rows(rows), summary_path)
-    print(f"Saved raw results: {raw_path}", flush=True)
-    print(f"Saved summary: {summary_path}", flush=True)
+    logger.info("Saved raw results: %s", raw_path)
+    logger.info("Saved summary: %s", summary_path)
 
 
 def resolve_datasets(args: argparse.Namespace, config: dict) -> list[str]:
@@ -137,6 +149,8 @@ def run_one_dataset_seed(
     config: dict,
     training_config: TrainingConfig,
     device: torch.device,
+    checkpoint_dir: Path,
+    logger: Logger | None = None,
 ) -> dict[str, float | int | str]:
     set_seed(seed)
 
@@ -182,11 +196,28 @@ def run_one_dataset_seed(
         config=training_config,
         device=device,
         threshold=threshold,
+        logger=logger,
+        log_prefix=f"{dataset_name} seed={seed} ",
     )
 
     val_metrics = evaluate_binary_classifier(model, val_loader, device, threshold=threshold)
     id_metrics = evaluate_binary_classifier(model, id_loader, device, threshold=threshold)
     ood_metrics = evaluate_binary_classifier(model, ood_loader, device, threshold=threshold)
+    checkpoint_path = checkpoint_dir / f"{dataset_name}_seed{seed}_erm_mlp.pt"
+    save_checkpoint(
+        path=checkpoint_path,
+        model=model,
+        dataset_name=dataset_name,
+        seed=seed,
+        input_dim=arrays.X_train.shape[1],
+        config=config,
+        training_config=training_config,
+        train_result=train_result,
+        val_metrics=val_metrics,
+        id_metrics=id_metrics,
+        ood_metrics=ood_metrics,
+        feature_names=arrays.feature_names,
+    )
 
     return {
         "method": "ERM-MLP",
@@ -199,6 +230,7 @@ def run_one_dataset_seed(
         "ood_test_size": len(arrays.y_ood_test),
         "best_epoch": train_result.best_epoch,
         "best_val_loss": train_result.best_val_loss,
+        "checkpoint_path": str(checkpoint_path),
         "val_accuracy": val_metrics.accuracy,
         "val_balanced_accuracy": val_metrics.balanced_accuracy,
         "val_f1": val_metrics.f1,
@@ -213,6 +245,44 @@ def run_one_dataset_seed(
         - ood_metrics.balanced_accuracy,
         "generalization_gap_f1": id_metrics.f1 - ood_metrics.f1,
     }
+
+
+def save_checkpoint(
+    path: Path,
+    model: torch.nn.Module,
+    dataset_name: str,
+    seed: int,
+    input_dim: int,
+    config: dict,
+    training_config: TrainingConfig,
+    train_result: object,
+    val_metrics: object,
+    id_metrics: object,
+    ood_metrics: object,
+    feature_names: list[str],
+) -> None:
+    ensure_dir(path.parent)
+    torch.save(
+        {
+            "method": "ERM-MLP",
+            "dataset": dataset_name,
+            "seed": seed,
+            "input_dim": input_dim,
+            "feature_names": feature_names,
+            "model_config": config["model"],
+            "training_config": training_config.__dict__,
+            "best_epoch": train_result.best_epoch,
+            "best_val_loss": train_result.best_val_loss,
+            "best_val_balanced_accuracy": train_result.best_val_balanced_accuracy,
+            "metrics": {
+                "val": val_metrics.as_dict(),
+                "id_test": id_metrics.as_dict(),
+                "ood_test": ood_metrics.as_dict(),
+            },
+            "state_dict": model.cpu().state_dict(),
+        },
+        path,
+    )
 
 
 def write_csv(rows: list[dict], path: Path) -> None:

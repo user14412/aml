@@ -27,9 +27,16 @@ The baseline runner uses cached tensors by default when they exist. Use `--refre
 Outputs are written to:
 
 - `outputs/runs/<run-name>/config.json`
+- `outputs/runs/<run-name>/train.log`
 - `outputs/results/<run-name>_raw.csv`
 - `outputs/results/<run-name>_summary.csv`
 - `outputs/cache/preprocessed/<dataset>.pt`
+
+Follow a running experiment log in PowerShell:
+
+```powershell
+Get-Content outputs\runs\<run-name>\train.log -Wait
+```
 
 ## Structure
 

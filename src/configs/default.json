@@ -1,6 +1,7 @@
 {
   "data_root": "TableShift Dataset",
   "output_root": "outputs",
+  "checkpoint_root": "outputs/checkpoints",
   "cache": {
     "enabled": true,
     "dir": "outputs/cache/preprocessed"
@@ -30,5 +31,5 @@
     "threshold": 0.5,
     "selection_metric": "val_balanced_accuracy"
   },
-  "seeds": [0, 1, 2]
+  "seeds": [42, 3407, 2004]
 }

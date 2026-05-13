@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass
+from logging import Logger
 
 import numpy as np
 import torch
@@ -18,6 +19,7 @@ class TrainingConfig:
     patience: int
     use_pos_weight: bool = True
     num_workers: int = 0
+    log_every: int = 1
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ def train_erm(
     config: TrainingConfig,
     device: torch.device,
     threshold: float = 0.5,
+    logger: Logger | None = None,
+    log_prefix: str = "",
 ) -> TrainingResult:
     """一个经典的训练循环。加pos_weight解决类别不平衡；加validate早停防止过拟合；没什么神奇的"""
     model.to(device)
@@ -73,6 +77,8 @@ def train_erm(
 
     for epoch in range(1, config.epochs + 1):
         model.train()
+        train_loss = 0.0
+        train_count = 0
         for X, y in train_loader:
             X = X.to(device)
             y = y.to(device)
@@ -82,9 +88,13 @@ def train_erm(
             loss = criterion(logits, y)
             loss.backward()
             optimizer.step()
+            batch_size = X.shape[0]
+            train_loss += float(loss.item()) * batch_size
+            train_count += batch_size
 
         val_loss = _compute_loss(model, val_loader, criterion, device)
         val_metrics = evaluate_binary_classifier(model, val_loader, device, threshold=threshold)
+        mean_train_loss = train_loss / max(train_count, 1)
         improved = val_metrics.balanced_accuracy > best_val_balanced_accuracy
         tied_with_lower_loss = (
             val_metrics.balanced_accuracy == best_val_balanced_accuracy
@@ -100,7 +110,35 @@ def train_erm(
         else:
             epochs_without_improvement += 1
 
+        if logger and _should_log_epoch(epoch, config, improved):
+            logger.info(
+                "%sepoch=%d/%d train_loss=%.6f val_loss=%.6f "
+                "val_acc=%.4f val_bacc=%.4f val_f1=%.4f best_epoch=%d "
+                "patience=%d/%d",
+                log_prefix,
+                epoch,
+                config.epochs,
+                mean_train_loss,
+                val_loss,
+                val_metrics.accuracy,
+                val_metrics.balanced_accuracy,
+                val_metrics.f1,
+                best_epoch,
+                epochs_without_improvement,
+                config.patience,
+            )
+
         if epochs_without_improvement >= config.patience:
+            if logger:
+                logger.info(
+                    "%searly_stop epoch=%d best_epoch=%d best_val_bacc=%.4f "
+                    "best_val_loss=%.6f",
+                    log_prefix,
+                    epoch,
+                    best_epoch,
+                    best_val_balanced_accuracy,
+                    best_val_loss,
+                )
             break
 
     model.load_state_dict(best_state)
@@ -109,6 +147,12 @@ def train_erm(
         best_val_balanced_accuracy=best_val_balanced_accuracy,
         best_val_loss=best_val_loss,
     )
+
+
+def _should_log_epoch(epoch: int, config: TrainingConfig, improved: bool) -> bool:
+    if improved or epoch == 1 or epoch == config.epochs:
+        return True
+    return config.log_every > 0 and epoch % config.log_every == 0
 
 
 def _as_float_tensor(values: np.ndarray | torch.Tensor) -> torch.Tensor:
