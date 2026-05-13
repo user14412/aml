@@ -1,0 +1,34 @@
+{
+  "data_root": "TableShift Dataset",
+  "output_root": "outputs",
+  "cache": {
+    "enabled": true,
+    "dir": "outputs/cache/preprocessed"
+  },
+  "datasets": [
+    "assistments",
+    "nhanes_lead",
+    "brfss_diabetes",
+    "acsfoodstamps",
+    "physionet",
+    "acsunemployment"
+  ],
+  "model": {
+    "hidden_dims": [256, 128],
+    "dropout": 0.1
+  },
+  "training": {
+    "epochs": 50,
+    "batch_size": 512,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "patience": 8,
+    "use_pos_weight": true,
+    "num_workers": 0
+  },
+  "evaluation": {
+    "threshold": 0.5,
+    "selection_metric": "val_balanced_accuracy"
+  },
+  "seeds": [0, 1, 2]
+}

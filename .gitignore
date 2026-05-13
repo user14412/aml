@@ -1,4 +1,41 @@
-.vscode/
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
 
-/TableShift Dataset/*
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project outputs and caches
+outputs/
+src/log/
+
+# Datasets
+TableShift Dataset/
+
+# Model checkpoints and caches
+*.pt
+*.pth
+*.checkpoint
+
+# Temporary files
+*.tmp
+*.log
+.cache/
