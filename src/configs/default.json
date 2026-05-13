@@ -80,6 +80,22 @@
       "confidence_threshold": 0.9,
       "update_scope": "head",
       "max_batches": null
+    },
+    "safe_lc_mlp": {
+      "batch_size": 1024,
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "steps_per_batch": 1,
+      "entropy_weight": 0.05,
+      "prior_weight": 0.0,
+      "anchor_weight": 0.01,
+      "confidence_threshold": 0.8,
+      "confident_prior_weight": 0.5,
+      "min_confident_fraction": 0.5,
+      "prior_strength": 0.0,
+      "max_prior_shift": 0.0,
+      "update_scope": "head_bn",
+      "max_batches": null
     }
   },
   "seeds": [42, 3407, 2004]
