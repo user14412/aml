@@ -69,5 +69,18 @@
     "threshold": 0.5,
     "selection_metric": "val_balanced_accuracy"
   },
+  "tta": {
+    "simple_mlp": {
+      "batch_size": 1024,
+      "lr": 0.0001,
+      "weight_decay": 0.0,
+      "steps_per_batch": 1,
+      "entropy_weight": 0.1,
+      "pseudo_label_weight": 1.0,
+      "confidence_threshold": 0.9,
+      "update_scope": "head",
+      "max_batches": null
+    }
+  },
   "seeds": [42, 3407, 2004]
 }

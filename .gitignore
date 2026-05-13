@@ -39,3 +39,5 @@ TableShift Dataset/
 *.tmp
 *.log
 .cache/
+
+.pdf

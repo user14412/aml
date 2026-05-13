@@ -56,6 +56,22 @@ python src/experiments/run_xgboost_baseline.py --all-datasets --seeds 42 3407 20
 python src/experiments/run_ft_transformer_baseline.py --all-datasets --seeds 42 3407 2004
 ```
 
+Run the first simple MLP test-time adaptation method:
+
+```bash
+python src/experiments/run_mlp_tta.py --dataset nhanes_lead --seeds 42 --source-run-name erm_mlp_all6_3seeds_final
+python src/experiments/run_mlp_tta.py --all-datasets --seeds 42 3407 2004 --source-run-name erm_mlp_all6_3seeds_final
+```
+
+This TTA runner loads pretrained source MLP checkpoints from
+`outputs/checkpoints/<source-run-name>/<dataset>_seed<seed>_erm_mlp.pt`, then
+adapts a copy of the model on OOD features only. OOD labels are used only after
+adaptation for final evaluation. The default TTA objective combines entropy
+minimization with confidence-filtered pseudo labels and updates only the final
+linear head. Use `--source-checkpoint-dir` to point to a custom checkpoint
+folder. Adapted weights are saved as
+`outputs/checkpoints/<tta-run-name>/<dataset>_seed<seed>_mlp_tta.pt`.
+
 On a cloud server, it is often better to run seeds as separate jobs, for example:
 
 ```bash
