@@ -14,18 +14,56 @@
     "physionet",
     "acsunemployment"
   ],
-  "model": {
-    "hidden_dims": [256, 128],
-    "dropout": 0.1
-  },
-  "training": {
-    "epochs": 50,
-    "batch_size": 512,
-    "lr": 0.001,
-    "weight_decay": 0.0001,
-    "patience": 8,
-    "use_pos_weight": true,
-    "num_workers": 0
+  "baselines": {
+    "mlp": {
+      "method_name": "ERM-MLP",
+      "model": {
+        "hidden_dims": [256, 128],
+        "dropout": 0.1
+      },
+      "training": {
+        "epochs": 50,
+        "batch_size": 512,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "patience": 8,
+        "use_pos_weight": true,
+        "num_workers": 0,
+        "log_every": 1
+      }
+    },
+    "xgboost": {
+      "method_name": "XGBoost",
+      "params": {
+        "n_estimators": 500,
+        "max_depth": 4,
+        "learning_rate": 0.03,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "objective": "binary:logistic",
+        "eval_metric": "logloss",
+        "tree_method": "hist",
+        "n_jobs": 8,
+        "auto_scale_pos_weight": true
+      }
+    },
+    "ft_transformer": {
+      "method_name": "FT-Transformer",
+      "model": {
+        "constructor": "default",
+        "n_blocks": 3
+      },
+      "training": {
+        "epochs": 50,
+        "batch_size": 1024,
+        "lr": 0.0001,
+        "weight_decay": 0.00001,
+        "patience": 8,
+        "use_pos_weight": true,
+        "num_workers": 0,
+        "log_every": 1
+      }
+    }
   },
   "evaluation": {
     "threshold": 0.5,
