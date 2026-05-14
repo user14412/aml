@@ -1,20 +1,19 @@
 \begin{table}[t]
 \centering
 \scriptsize
-\caption{Per-dataset OOD balanced accuracy and F1. The table is generated from \texttt{outputs/results/final\_report\_table.csv}.}
+\caption{Per-dataset OOD F1 and F1 deltas for the main MLP comparison and the strongest tabular backbone.}
 \label{tab:per_dataset}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrrrrrr}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Dataset & ERM BAcc. & ERM F1 & DPL BAcc. & DPL F1 & Vanilla BAcc. & Vanilla F1 & FT-Trans. BAcc. & FT-Trans. F1 \\
+Dataset & ERM F1 & DPL F1 & Vanilla F1 & FT-Trans. F1 & DPL-ERM $\Delta$ & DPL-Van. $\Delta$ \\
 \midrule
-assistments & 0.6337 & 0.6761 & 0.6337 & 0.6761 & 0.6337 & 0.6761 & 0.6350 & 0.6724 \\
-nhanes\_lead & 0.7102 & 0.2586 & 0.7102 & 0.2586 & 0.7102 & 0.2586 & 0.7131 & 0.2695 \\
-brfss\_diabetes & 0.7435 & 0.4910 & 0.7429 & 0.4933 & 0.7434 & 0.4915 & 0.7463 & 0.4933 \\
-acsfoodstamps & 0.7558 & 0.5655 & 0.7561 & 0.5689 & 0.7557 & 0.5672 & 0.7655 & 0.5807 \\
-physionet & 0.5948 & 0.1781 & 0.5955 & 0.1824 & 0.5969 & 0.1811 & 0.6053 & 0.1823 \\
-acsunemployment & 0.9330 & 0.4757 & 0.9332 & 0.4743 & 0.9340 & 0.4686 & 0.9377 & 0.4716 \\
+\texttt{assistments} & 0.6761 & 0.6761 & 0.6761 & 0.6724 & +0.0000 & +0.0000 \\
+\texttt{nhanes\_lead} & 0.2586 & 0.2586 & 0.2586 & 0.2695 & +0.0000 & +0.0000 \\
+\texttt{brfss\_diabetes} & 0.4910 & 0.4933 & 0.4915 & 0.4933 & +0.0023 & +0.0018 \\
+\texttt{acsfoodstamps} & 0.5655 & 0.5689 & 0.5672 & 0.5807 & +0.0034 & +0.0017 \\
+\texttt{physionet} & 0.1781 & 0.1824 & 0.1811 & 0.1823 & +0.0043 & +0.0013 \\
+\texttt{acsunemployment} & 0.4757 & 0.4743 & 0.4686 & 0.4716 & -0.0014 & +0.0057 \\
 \bottomrule
-\end{tabular}%
-}
+\end{tabular}
 \end{table}
