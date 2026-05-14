@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -11,6 +12,7 @@ REPORT_DIR = ROOT / "report"
 GENERATED_DIR = REPORT_DIR / "generated"
 RESULTS_DIR = ROOT / "outputs" / "results"
 DRAFT_PATH = ROOT / "docs" / "report" / "draft_v1.tex"
+CONFIG_PATH = ROOT / "src" / "configs" / "default.json"
 
 
 METHOD_ORDER = [
@@ -45,6 +47,11 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def read_json(path: Path) -> dict:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def mean(values: list[float]) -> float:
     if not values:
         raise ValueError("cannot average an empty list")
@@ -76,6 +83,19 @@ def fmt(value: float, digits: int = 6, signed: bool = False) -> str:
     return f"{value:+.{digits}f}" if signed else f"{value:.{digits}f}"
 
 
+def fmt_pm(value: float, std: float, digits: int = 4, signed: bool = False) -> str:
+    return rf"${fmt(value, digits, signed=signed)} \pm {fmt(std, digits)}$"
+
+
+def macro_metric_pair(rows: list[dict[str, str]], metric: str) -> tuple[float, float]:
+    mean_key = f"{metric}_mean"
+    std_key = f"{metric}_std"
+    return (
+        mean([float(row[mean_key]) for row in rows]),
+        mean([float(row[std_key]) for row in rows]),
+    )
+
+
 def write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
@@ -93,11 +113,15 @@ def main_results_table() -> str:
         r"\small",
         (
             r"\caption{Macro OOD results averaged over six TableShift datasets. "
+            r"Entries are macro averages over six datasets. For each dataset, we compute "
+            r"the mean and standard deviation over three random seeds, then report the "
+            r"average of dataset-level means and standard deviations. "
             r"DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants, "
             r"while FT-Transformer remains strongest overall.}"
         ),
         r"\label{tab:main_results}",
-        r"\begin{tabular}{lrrrr}",
+        r"\resizebox{\textwidth}{!}{%",
+        r"\begin{tabular}{lcccc}",
         r"\toprule",
         r"Method & OOD Acc. & OOD BAcc. & OOD F1 & BAcc. Gap \\",
         r"\midrule",
@@ -106,16 +130,22 @@ def main_results_table() -> str:
         method_rows = grouped.get(method, [])
         if not method_rows:
             continue
-        acc = mean([float(row["ood_accuracy_mean"]) for row in method_rows])
-        bacc = mean([float(row["ood_balanced_accuracy_mean"]) for row in method_rows])
-        f1 = mean([float(row["ood_f1_mean"]) for row in method_rows])
-        gap = mean(
-            [float(row["generalization_gap_balanced_accuracy_mean"]) for row in method_rows]
+        acc, acc_std = macro_metric_pair(method_rows, "ood_accuracy")
+        bacc, bacc_std = macro_metric_pair(method_rows, "ood_balanced_accuracy")
+        f1, f1_std = macro_metric_pair(method_rows, "ood_f1")
+        gap, gap_std = macro_metric_pair(
+            method_rows, "generalization_gap_balanced_accuracy"
         )
         lines.append(
-            f"{latex_escape(method)} & {fmt(acc)} & {fmt(bacc)} & {fmt(f1)} & {fmt(gap)} \\\\"
+            "{} & {} & {} & {} & {} \\\\".format(
+                latex_escape(method),
+                fmt_pm(acc, acc_std),
+                fmt_pm(bacc, bacc_std),
+                fmt_pm(f1, f1_std),
+                fmt_pm(gap, gap_std),
+            )
         )
-    lines.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}"])
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
     return "\n".join(lines) + "\n"
 
 
@@ -206,19 +236,40 @@ def ablation_table() -> str:
     grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in rows:
         grouped[row["variant"]].append(row)
+    has_std = all(
+        key in rows[0]
+        for key in [
+            "ood_balanced_accuracy_std",
+            "ood_f1_std",
+            "ood_delta_balanced_accuracy_std",
+        ]
+    )
+    caption = (
+        r"\caption{Ablation study averaged over \texttt{brfss\_diabetes}, "
+        r"\texttt{physionet}, and \texttt{acsunemployment}. "
+    )
+    if has_std:
+        caption += (
+            r"Entries report macro averages of per-dataset mean $\pm$ seed std from the "
+            r"three-seed summary statistics. DPL-TTA has higher macro F1 than vanilla "
+            r"pseudo-labeling on this subset, while vanilla pseudo-labeling has higher "
+            r"macro balanced accuracy.}"
+        )
+    else:
+        caption += (
+            r"Entries are averaged over three seeds. DPL-TTA has higher macro F1 than "
+            r"vanilla pseudo-labeling on this subset, while vanilla pseudo-labeling has "
+            r"higher macro balanced accuracy.}"
+        )
 
     lines = [
         r"\begin{table}[t]",
         r"\centering",
         r"\small",
-        (
-            r"\caption{Ablation study averaged over \texttt{brfss\_diabetes}, "
-            r"\texttt{physionet}, and \texttt{acsunemployment}. "
-            r"DPL-TTA has higher macro F1 than vanilla pseudo-labeling on this subset, "
-            r"while vanilla pseudo-labeling has higher macro balanced accuracy.}"
-        ),
+        caption,
         r"\label{tab:ablation}",
-        r"\begin{tabular}{lrrr}",
+        r"\resizebox{\textwidth}{!}{%",
+        r"\begin{tabular}{lccc}",
         r"\toprule",
         r"Variant & Macro OOD BAcc. & Macro OOD F1 & Macro BAcc. Delta vs. Source \\",
         r"\midrule",
@@ -227,14 +278,57 @@ def ablation_table() -> str:
         variant_rows = grouped.get(variant, [])
         if not variant_rows:
             continue
-        bacc = mean([float(row["ood_balanced_accuracy_mean"]) for row in variant_rows])
-        f1 = mean([float(row["ood_f1_mean"]) for row in variant_rows])
-        delta = mean([float(row["ood_delta_balanced_accuracy_mean"]) for row in variant_rows])
+        bacc, bacc_std = macro_metric_pair(variant_rows, "ood_balanced_accuracy")
+        f1, f1_std = macro_metric_pair(variant_rows, "ood_f1")
+        delta, delta_std = macro_metric_pair(variant_rows, "ood_delta_balanced_accuracy")
+        if has_std:
+            values = [
+                fmt_pm(bacc, bacc_std),
+                fmt_pm(f1, f1_std),
+                fmt_pm(delta, delta_std, signed=True),
+            ]
+        else:
+            values = [fmt(bacc), fmt(f1), fmt(delta, signed=True)]
         lines.append(
-            f"{latex_escape(variant)} & {fmt(bacc)} & {fmt(f1)} & {fmt(delta, signed=True)} \\\\"
+            "{} & {} & {} & {} \\\\".format(
+                latex_escape(variant),
+                values[0],
+                values[1],
+                values[2],
+            )
         )
-    lines.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}"])
+    lines.extend([r"\bottomrule", r"\end{tabular}%", r"}", r"\end{table}"])
     return "\n".join(lines) + "\n"
+
+
+def experimental_setup_text() -> str:
+    config = read_json(CONFIG_PATH)
+    mlp_config = config["baselines"]["mlp"]
+    model_config = mlp_config["model"]
+    training = mlp_config["training"]
+    selection_metric = config["evaluation"]["selection_metric"]
+    hidden_dims = ", ".join(str(dim) for dim in model_config["hidden_dims"])
+    use_pos_weight = "enabled" if training.get("use_pos_weight", False) else "disabled"
+    return rf"""
+All reported results are averaged over three random seeds: $42$, $3407$, and $2004$. We report OOD accuracy, OOD balanced accuracy, OOD F1, and balanced-accuracy generalization gap. The balanced-accuracy generalization gap is defined as ID balanced accuracy minus OOD balanced accuracy.
+
+ERM-MLP denotes a standard supervised MLP trained by empirical risk minimization without test-time adaptation. For the MLP backbone, we use hidden dimensions $[{hidden_dims}]$ with dropout ${model_config["dropout"]}$. The ERM-MLP training loop uses the AdamW optimizer with binary cross-entropy with logits and positive-class weighting {use_pos_weight}. The learning rate is ${training["lr"]}$, the weight decay is ${training["weight_decay"]}$, and the batch size is ${training["batch_size"]}$. Training runs for at most ${training["epochs"]}$ epochs with early-stopping patience ${training["patience"]}$. The early stopping metric is validation balanced accuracy, implemented as \texttt{{{latex_escape(selection_metric)}}}.
+"""
+
+
+def rewrite_experimental_setup(body: str) -> str:
+    old = (
+        "All reported results are averaged over three random seeds: $42$, $3407$, "
+        "and $2004$. We report OOD accuracy, OOD balanced accuracy, OOD F1, and "
+        "balanced-accuracy generalization gap. The generalization gap measures "
+        "the difference between in-distribution and OOD performance, and is used "
+        "to characterize robustness under distribution shift."
+    )
+    new = experimental_setup_text().strip()
+    body, count = body.replace(old, new), body.count(old)
+    if count != 1:
+        raise RuntimeError("expected to replace exactly one experimental setup paragraph")
+    return body
 
 
 def strip_static_table(body: str, label: str, replacement: str) -> str:
@@ -331,6 +425,8 @@ The source positive prior is computed from labeled source training data:
 \label{eq:source_prior}
 \end{equation}
 This quantity is stored after source training. Because it is computed only from source training labels, it does not violate the target-label-free protocol.
+
+During adaptation, DPL-TTA does not access raw source samples. It only uses the source-trained model $f_{\theta_0}$ and the stored source label prior $\pi_s$.
 
 At test time, the source model $f_{\theta_0}$ predicts probabilities on unlabeled OOD features,
 \begin{equation}
@@ -474,6 +570,15 @@ def add_citations_and_rewrite_claims(body: str) -> str:
         "The second group contains stronger tabular baselines:": (
             "The second group contains stronger tabular baselines, XGBoost~\\citep{chen2016xgboost} and FT-Transformer~\\citep{gorishniy2021revisiting}:"
         ),
+        "Table~\\ref{tab:main_results} summarizes the macro OOD results over all six datasets. The main conclusion is that FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1.": (
+            "Table~\\ref{tab:main_results} summarizes the macro OOD results over all six datasets. Because several TableShift tasks are class-imbalanced, raw accuracy can be dominated by majority-class behavior; therefore, we use balanced accuracy and F1 as the main indicators of OOD robustness. The main conclusion is that FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1."
+        ),
+        "The first group contains MLP-based methods:": (
+            "ERM-MLP denotes a standard supervised MLP trained by empirical risk minimization without test-time adaptation. The first group contains MLP-based methods:"
+        ),
+        "ERM-MLP is the source model without test-time adaptation. Simple-TTA and SafeGate-TTA are conservative MLP-based adaptation variants. Vanilla-PL-TTA uses confidence-based pseudo labels without target-prior control. DPL-TTA uses distribution-guided pseudo-label selection with a shrinkage target prior.": (
+            "Simple-TTA and SafeGate-TTA are conservative MLP-based adaptation variants. Vanilla-PL-TTA uses confidence-based pseudo labels without target-prior control. DPL-TTA uses distribution-guided pseudo-label selection with a shrinkage target prior."
+        ),
         "However, DPL-TTA does not achieve the best macro OOD balanced accuracy. Vanilla-PL-TTA has a slightly higher macro OOD balanced accuracy than DPL-TTA, and both XGBoost and FT-Transformer outperform DPL-TTA on this metric. Therefore, we do not claim that DPL-TTA significantly improves balanced accuracy. We also do not claim that DPL-TTA beats all baselines. The more accurate interpretation is that DPL-TTA is a conservative MLP-based TTA method that improves macro OOD F1 among MLP-based TTA variants, while stronger tabular backbones remain better overall.": (
             "However, DPL-TTA does not achieve the best macro OOD balanced accuracy. Vanilla-PL-TTA has a slightly higher macro OOD balanced accuracy than DPL-TTA, and both XGBoost and FT-Transformer outperform DPL-TTA on this metric. The more accurate interpretation is that DPL-TTA is a conservative MLP-based TTA method that improves macro OOD F1 among MLP-based TTA variants, while stronger tabular backbones remain better overall."
         ),
@@ -524,6 +629,7 @@ def make_report_tex() -> str:
 
     body = add_citations_and_rewrite_claims(body)
     body = replace_between(body, r"\section{Methodology}", r"\section{Experiments}", methodology_section())
+    body = rewrite_experimental_setup(body)
     body = strip_static_table(body, "tab:main_results", r"\input{generated/main_results_table.tex}")
     body = replace_figure_suggestions(body)
     body = strip_static_table(body, "tab:per_dataset", r"\input{generated/per_dataset_table.tex}")

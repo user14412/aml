@@ -1,19 +1,21 @@
 \begin{table}[t]
 \centering
 \small
-\caption{Macro OOD results averaged over six TableShift datasets. DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants, while FT-Transformer remains strongest overall.}
+\caption{Macro OOD results averaged over six TableShift datasets. Entries are macro averages over six datasets. For each dataset, we compute the mean and standard deviation over three random seeds, then report the average of dataset-level means and standard deviations. DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants, while FT-Transformer remains strongest overall.}
 \label{tab:main_results}
-\begin{tabular}{lrrrr}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
 \toprule
 Method & OOD Acc. & OOD BAcc. & OOD F1 & BAcc. Gap \\
 \midrule
-ERM-MLP & 0.685865 & 0.728499 & 0.440841 & 0.070583 \\
-Simple-TTA & 0.704795 & 0.728146 & 0.440222 & 0.070936 \\
-SafeGate-TTA & 0.687201 & 0.728740 & 0.440324 & 0.070341 \\
-DPL-TTA & 0.697950 & 0.728603 & 0.442267 & 0.070479 \\
-Vanilla-PL-TTA & 0.691296 & 0.728996 & 0.440526 & 0.070086 \\
-XGBoost & 0.692799 & 0.732953 & 0.443815 & 0.065114 \\
-FT-Transformer & 0.691541 & 0.733822 & 0.444965 & 0.068255 \\
+ERM-MLP & $0.6859 \pm 0.0063$ & $0.7285 \pm 0.0019$ & $0.4408 \pm 0.0027$ & $0.0706 \pm 0.0054$ \\
+Simple-TTA & $0.7048 \pm 0.0090$ & $0.7281 \pm 0.0023$ & $0.4402 \pm 0.0028$ & $0.0709 \pm 0.0058$ \\
+SafeGate-TTA & $0.6872 \pm 0.0076$ & $0.7287 \pm 0.0021$ & $0.4403 \pm 0.0027$ & $0.0703 \pm 0.0056$ \\
+DPL-TTA & $0.6980 \pm 0.0074$ & $0.7286 \pm 0.0021$ & $0.4423 \pm 0.0025$ & $0.0705 \pm 0.0057$ \\
+Vanilla-PL-TTA & $0.6913 \pm 0.0078$ & $0.7290 \pm 0.0020$ & $0.4405 \pm 0.0024$ & $0.0701 \pm 0.0054$ \\
+XGBoost & $0.6928 \pm 0.0018$ & $0.7330 \pm 0.0007$ & $0.4438 \pm 0.0007$ & $0.0651 \pm 0.0012$ \\
+FT-Transformer & $0.6915 \pm 0.0149$ & $0.7338 \pm 0.0029$ & $0.4450 \pm 0.0050$ & $0.0683 \pm 0.0051$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

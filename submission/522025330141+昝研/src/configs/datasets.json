@@ -1,0 +1,20 @@
+{
+  "assistments": {
+    "target": "correct"
+  },
+  "nhanes_lead": {
+    "target": "LBXBPB"
+  },
+  "brfss_diabetes": {
+    "target": "DIABETES"
+  },
+  "acsfoodstamps": {
+    "target": "FS"
+  },
+  "physionet": {
+    "target": "SepsisLabel"
+  },
+  "acsunemployment": {
+    "target": "ESR"
+  }
+}

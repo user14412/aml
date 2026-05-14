@@ -142,6 +142,8 @@ The source positive prior is computed from labeled source training data:
 \end{equation}
 This quantity is stored after source training. Because it is computed only from source training labels, it does not violate the target-label-free protocol.
 
+During adaptation, DPL-TTA does not access raw source samples. It only uses the source-trained model $f_{\theta_0}$ and the stored source label prior $\pi_s$.
+
 At test time, the source model $f_{\theta_0}$ predicts probabilities on unlabeled OOD features,
 \begin{equation}
 p_j
@@ -260,7 +262,9 @@ Here, $\theta_{\mathrm{tr}}$ denotes the trainable subset of parameters and $\la
 We evaluate DPL-TTA on six binary classification datasets from the TableShift benchmark~\citep{gardner2023tableshift}:
 \texttt{assistments}, \texttt{nhanes\_lead}, \texttt{brfss\_diabetes}, \texttt{acsfoodstamps}, \texttt{physionet}, and \texttt{acsunemployment}. All methods follow the official TableShift train, validation, in-distribution test, and OOD test splits. Hyperparameters are selected without using OOD labels.
 
-All reported results are averaged over three random seeds: $42$, $3407$, and $2004$. We report OOD accuracy, OOD balanced accuracy, OOD F1, and balanced-accuracy generalization gap. The generalization gap measures the difference between in-distribution and OOD performance, and is used to characterize robustness under distribution shift.
+All reported results are averaged over three random seeds: $42$, $3407$, and $2004$. We report OOD accuracy, OOD balanced accuracy, OOD F1, and balanced-accuracy generalization gap. The balanced-accuracy generalization gap is defined as ID balanced accuracy minus OOD balanced accuracy.
+
+ERM-MLP denotes a standard supervised MLP trained by empirical risk minimization without test-time adaptation. For the MLP backbone, we use hidden dimensions $[256, 128]$ with dropout $0.1$. The ERM-MLP training loop uses the AdamW optimizer with binary cross-entropy with logits and positive-class weighting enabled. The learning rate is $0.001$, the weight decay is $0.0001$, and the batch size is $512$. Training runs for at most $50$ epochs with early-stopping patience $8$. The early stopping metric is validation balanced accuracy, implemented as \texttt{val\_balanced\_accuracy}.
 
 The adaptation protocol is strictly target-label-free. For TTA methods, adaptation uses only unlabeled OOD features. OOD labels are not used for adaptation, training, pseudo-label construction, target-prior estimation, or hyperparameter selection. OOD labels are used only for final evaluation.
 
@@ -276,7 +280,7 @@ The first group contains MLP-based methods. These methods share the same source 
 \text{Vanilla-PL-TTA}, \quad
 \text{DPL-TTA}.
 \]
-ERM-MLP is the source model without test-time adaptation. Simple-TTA and SafeGate-TTA are conservative MLP-based adaptation variants. Vanilla-PL-TTA uses confidence-based pseudo labels without target-prior control. DPL-TTA uses distribution-guided pseudo-label selection with a shrinkage target prior.
+Simple-TTA and SafeGate-TTA are conservative MLP-based adaptation variants. Vanilla-PL-TTA uses confidence-based pseudo labels without target-prior control. DPL-TTA uses distribution-guided pseudo-label selection with a shrinkage target prior.
 
 The second group contains stronger tabular baselines, XGBoost~\citep{chen2016xgboost} and FT-Transformer~\citep{gorishniy2021revisiting}:
 \[
@@ -286,7 +290,7 @@ These baselines are included to evaluate whether improvements from MLP-based TTA
 
 \subsection{Main Results}
 
-Table~\ref{tab:main_results} summarizes the macro OOD results over all six datasets. The main conclusion is that FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1. XGBoost is also a strong non-neural baseline and outperforms the MLP-based methods on macro OOD balanced accuracy and macro OOD F1.
+Table~\ref{tab:main_results} summarizes the macro OOD results over all six datasets. Because several TableShift tasks are class-imbalanced, raw accuracy can be dominated by majority-class behavior; therefore, we use balanced accuracy and F1 as the main indicators of OOD robustness. The main conclusion is that FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1. XGBoost is also a strong non-neural baseline and outperforms the MLP-based methods on macro OOD balanced accuracy and macro OOD F1.
 
 Within the MLP-based TTA variants, DPL-TTA achieves the best macro OOD F1. Specifically, DPL-TTA obtains a macro OOD F1 of $0.442267$, compared with $0.440841$ for ERM-MLP, $0.440222$ for Simple-TTA, $0.440324$ for SafeGate-TTA, and $0.440526$ for Vanilla-PL-TTA. This supports the claim that distribution-guided pseudo-labeling improves macro F1 within the MLP-based TTA family.
 

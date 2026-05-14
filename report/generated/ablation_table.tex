@@ -1,16 +1,18 @@
 \begin{table}[t]
 \centering
 \small
-\caption{Ablation study averaged over \texttt{brfss\_diabetes}, \texttt{physionet}, and \texttt{acsunemployment}. DPL-TTA has higher macro F1 than vanilla pseudo-labeling on this subset, while vanilla pseudo-labeling has higher macro balanced accuracy.}
+\caption{Ablation study averaged over \texttt{brfss\_diabetes}, \texttt{physionet}, and \texttt{acsunemployment}. Entries report macro averages of per-dataset mean $\pm$ seed std from the three-seed summary statistics. DPL-TTA has higher macro F1 than vanilla pseudo-labeling on this subset, while vanilla pseudo-labeling has higher macro balanced accuracy.}
 \label{tab:ablation}
-\begin{tabular}{lrrr}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
 \toprule
 Variant & Macro OOD BAcc. & Macro OOD F1 & Macro BAcc. Delta vs. Source \\
 \midrule
-DPL full & 0.757199 & 0.383321 & +0.000087 \\
-w/o prior gate & 0.757199 & 0.383321 & +0.000087 \\
-w/o anchor & 0.757197 & 0.383332 & +0.000085 \\
-vanilla pseudo-label & 0.758119 & 0.380404 & +0.001007 \\
+DPL full & $0.7572 \pm 0.0018$ & $0.3833 \pm 0.0029$ & $+0.0001 \pm 0.0005$ \\
+w/o prior gate & $0.7572 \pm 0.0018$ & $0.3833 \pm 0.0029$ & $+0.0001 \pm 0.0005$ \\
+w/o anchor & $0.7572 \pm 0.0018$ & $0.3833 \pm 0.0029$ & $+0.0001 \pm 0.0005$ \\
+vanilla pseudo-label & $0.7581 \pm 0.0017$ & $0.3804 \pm 0.0025$ & $+0.0010 \pm 0.0006$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
