@@ -25,6 +25,7 @@ ABLATION_DATASETS = [
 FINAL_METHODS = [
     ("ERM-MLP", "erm_mlp_all6_3seeds_final_summary.csv"),
     ("XGBoost", "xgboost_all6_3seeds_final_summary.csv"),
+    ("FT-Transformer", "ft_transformer_all6_3seeds_e10_bs1024_summary.csv"),
     ("Simple-TTA", "mlp_tta_all6_3seeds_summary.csv"),
     ("SafeGate-TTA", "safelc_gated_entropy_all6_3seeds_summary.csv"),
     ("DPL-TTA", "dpl_all6_3seeds_summary.csv"),
@@ -172,11 +173,13 @@ def write_final_report_table() -> None:
             {
                 "dataset": dataset,
                 "ERM-MLP bacc": metric_mean(rows_by_method, "ERM-MLP", dataset, "ood_balanced_accuracy"),
+                "FT-Transformer bacc": metric_mean(rows_by_method, "FT-Transformer", dataset, "ood_balanced_accuracy"),
                 "Simple-TTA bacc": metric_mean(rows_by_method, "Simple-TTA", dataset, "ood_balanced_accuracy"),
                 "SafeGate-TTA bacc": metric_mean(rows_by_method, "SafeGate-TTA", dataset, "ood_balanced_accuracy"),
                 "DPL-TTA bacc": metric_mean(rows_by_method, "DPL-TTA", dataset, "ood_balanced_accuracy"),
                 "Vanilla-PL-TTA bacc": metric_mean(rows_by_method, "Vanilla-PL-TTA", dataset, "ood_balanced_accuracy"),
                 "ERM-MLP f1": metric_mean(rows_by_method, "ERM-MLP", dataset, "ood_f1"),
+                "FT-Transformer f1": metric_mean(rows_by_method, "FT-Transformer", dataset, "ood_f1"),
                 "Simple-TTA f1": metric_mean(rows_by_method, "Simple-TTA", dataset, "ood_f1"),
                 "SafeGate-TTA f1": metric_mean(rows_by_method, "SafeGate-TTA", dataset, "ood_f1"),
                 "DPL-TTA f1": metric_mean(rows_by_method, "DPL-TTA", dataset, "ood_f1"),

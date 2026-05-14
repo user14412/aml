@@ -15,6 +15,7 @@ FIGURE_DIR = RESULTS_DIR / "figures"
 METHOD_ORDER = [
     "ERM-MLP",
     "XGBoost",
+    "FT-Transformer",
     "Simple-TTA",
     "SafeGate-TTA",
     "DPL-TTA",
@@ -24,6 +25,7 @@ METHOD_ORDER = [
 METHOD_COLORS = {
     "ERM-MLP": "#4C78A8",
     "XGBoost": "#F58518",
+    "FT-Transformer": "#A0CBE8",
     "Simple-TTA": "#54A24B",
     "SafeGate-TTA": "#B279A2",
     "DPL-TTA": "#E45756",
@@ -70,7 +72,7 @@ def plot_macro_metric(
         values.append(mean(float(row[metric]) for row in method_rows))
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(8.4, 4.8), dpi=160)
+    fig, ax = plt.subplots(figsize=(9.6, 4.8), dpi=160)
     colors = [METHOD_COLORS[method] for method in METHOD_ORDER]
     bars = ax.bar(METHOD_ORDER, values, color=colors, edgecolor="#333333", linewidth=0.6)
     ax.set_title(title)

@@ -81,6 +81,7 @@ Macro OOD metrics over all six datasets:
 |---|---:|---:|---:|---:|
 | ERM-MLP | 0.685865 | 0.728499 | 0.440841 | 0.070583 |
 | XGBoost | 0.692799 | 0.732953 | 0.443815 | 0.065114 |
+| FT-Transformer | 0.691541 | 0.733822 | 0.444965 | 0.068255 |
 | Simple-TTA | 0.704795 | 0.728146 | 0.440222 | 0.070936 |
 | SafeGate-TTA | 0.687201 | 0.728740 | 0.440324 | 0.070341 |
 | DPL-TTA | 0.697950 | 0.728603 | 0.442267 | 0.070479 |
@@ -88,14 +89,14 @@ Macro OOD metrics over all six datasets:
 
 Per-dataset balanced accuracy and DPL diagnostics:
 
-| Dataset | ERM | Simple | SafeGate | DPL | Vanilla-PL | DPL-ERM BAcc | DPL-ERM F1 | DPL adapted frac | DPL confidence frac | DPL prior shift |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| assistments | 0.6337 | 0.6337 | 0.6340 | 0.6337 | 0.6337 | +0.0000 | +0.0000 | 0.000 | 0.831 | 0.009 |
-| nhanes_lead | 0.7102 | 0.7096 | 0.7102 | 0.7102 | 0.7102 | +0.0000 | +0.0000 | 0.667 | 0.329 | 0.100 |
-| brfss_diabetes | 0.7435 | 0.7434 | 0.7431 | 0.7429 | 0.7434 | -0.0006 | +0.0023 | 1.000 | 0.656 | 0.103 |
-| acsfoodstamps | 0.7558 | 0.7556 | 0.7561 | 0.7561 | 0.7557 | +0.0004 | +0.0034 | 1.000 | 0.719 | 0.102 |
-| physionet | 0.5948 | 0.5925 | 0.5948 | 0.5955 | 0.5969 | +0.0007 | +0.0043 | 1.000 | 0.388 | 0.209 |
-| acsunemployment | 0.9330 | 0.9342 | 0.9343 | 0.9332 | 0.9340 | +0.0002 | -0.0014 | 1.000 | 0.977 | 0.052 |
+| Dataset | ERM | FT-Transformer | Simple | SafeGate | DPL | Vanilla-PL | DPL-ERM BAcc | DPL-ERM F1 | DPL adapted frac | DPL confidence frac | DPL prior shift |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| assistments | 0.6337 | 0.6350 | 0.6337 | 0.6340 | 0.6337 | 0.6337 | +0.0000 | +0.0000 | 0.000 | 0.831 | 0.009 |
+| nhanes_lead | 0.7102 | 0.7131 | 0.7096 | 0.7102 | 0.7102 | 0.7102 | +0.0000 | +0.0000 | 0.667 | 0.329 | 0.100 |
+| brfss_diabetes | 0.7435 | 0.7463 | 0.7434 | 0.7431 | 0.7429 | 0.7434 | -0.0006 | +0.0023 | 1.000 | 0.656 | 0.103 |
+| acsfoodstamps | 0.7558 | 0.7655 | 0.7556 | 0.7561 | 0.7561 | 0.7557 | +0.0004 | +0.0034 | 1.000 | 0.719 | 0.102 |
+| physionet | 0.5948 | 0.6053 | 0.5925 | 0.5948 | 0.5955 | 0.5969 | +0.0007 | +0.0043 | 1.000 | 0.388 | 0.209 |
+| acsunemployment | 0.9330 | 0.9377 | 0.9342 | 0.9343 | 0.9332 | 0.9340 | +0.0002 | -0.0014 | 1.000 | 0.977 | 0.052 |
 
 ## Ablation Interpretation
 
@@ -110,11 +111,15 @@ Ablations were run on `brfss_diabetes`, `physionet`, and `acsunemployment` with 
 
 The prior gate ablation matches full DPL on these three datasets because all three have prior shifts above the default gate threshold. The anchor ablation is also close to full DPL, likely because the method uses only one adaptation step and a small learning rate. The anchor still serves as a conservative guard against larger updates.
 
-Vanilla pseudo-labeling has higher balanced accuracy on the selected ablation datasets and also a slightly higher macro balanced accuracy over all six datasets. However, it has lower macro F1 than DPL-TTA. On the full six-dataset comparison, DPL-TTA reaches macro F1 `0.442267`, while Vanilla-PL-TTA reaches `0.440526`. This supports the final narrative: Vanilla-PL-TTA is an aggressive pseudo-label baseline, while DPL-TTA is the final conservative, distribution-guided method that improves F1 and avoids the macro F1 degradation seen in naive TTA.
+FT-Transformer is the strongest overall baseline, with the best macro OOD balanced accuracy (`0.733822`) and macro OOD F1 (`0.444965`). XGBoost is also a strong non-neural baseline, outperforming the MLP-based methods on macro balanced accuracy and F1.
+
+Within the MLP-based TTA variants, DPL-TTA achieves the best macro OOD F1 (`0.442267`). Vanilla pseudo-labeling has higher balanced accuracy on the selected ablation datasets and also a slightly higher macro balanced accuracy over all six datasets (`0.728996` vs. DPL-TTA `0.728603`). However, it has lower macro F1 than DPL-TTA (`0.440526` vs. `0.442267`). This supports the final narrative: Vanilla-PL-TTA is an aggressive pseudo-label baseline, while DPL-TTA is the final conservative, distribution-guided MLP TTA method. DPL-TTA does not beat stronger non-MLP/stronger-backbone baselines overall.
 
 ## Limitations
 
 The gains are small. DPL-TTA should be presented as a conservative and interpretable TTA method, not as a large performance breakthrough.
+
+Stronger backbones such as FT-Transformer still outperform DPL-TTA, suggesting that DPL is complementary to architecture improvements rather than a replacement for them.
 
 DPL-TTA is source-prior-aware rather than prior-free. It uses the ID training label prior, which is allowed by the protocol but should be stated clearly.
 
