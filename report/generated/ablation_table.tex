@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Ablation study averaged over \texttt{brfss\_diabetes}, \texttt{physionet}, and \texttt{acsunemployment}. The table is generated from \texttt{outputs/results/dpl\_ablation\_summary.csv}.}
+\label{tab:ablation}
+\begin{tabular}{lrrr}
+\toprule
+Variant & Macro OOD BAcc. & Macro OOD F1 & Macro BAcc. Delta vs. Source \\
+\midrule
+DPL full & 0.757199 & 0.383321 & +0.000087 \\
+w/o prior gate & 0.757199 & 0.383321 & +0.000087 \\
+w/o anchor & 0.757197 & 0.383332 & +0.000085 \\
+vanilla pseudo-label & 0.758119 & 0.380404 & +0.001007 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Macro OOD results averaged over six TableShift datasets. The table is generated from \texttt{outputs/results/final\_comparison\_summary.csv}.}
+\label{tab:main_results}
+\begin{tabular}{lrrrr}
+\toprule
+Method & OOD Acc. & OOD BAcc. & OOD F1 & BAcc. Gap \\
+\midrule
+ERM-MLP & 0.685865 & 0.728499 & 0.440841 & 0.070583 \\
+Simple-TTA & 0.704795 & 0.728146 & 0.440222 & 0.070936 \\
+SafeGate-TTA & 0.687201 & 0.728740 & 0.440324 & 0.070341 \\
+DPL-TTA & 0.697950 & 0.728603 & 0.442267 & 0.070479 \\
+Vanilla-PL-TTA & 0.691296 & 0.728996 & 0.440526 & 0.070086 \\
+XGBoost & 0.692799 & 0.732953 & 0.443815 & 0.065114 \\
+FT-Transformer & 0.691541 & 0.733822 & 0.444965 & 0.068255 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,20 @@
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{DPL-TTA diagnostics computed without OOD labels. The table is generated from \texttt{outputs/results/dpl\_diagnostics\_summary.csv}.}
+\label{tab:dpl_diagnostics}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Dataset & Adapted Frac. & Conf. Frac. & Source Prior & Raw Target Prior & Target Prior & Prior Shift \\
+\midrule
+assistments & 0.000 & 0.831 & 0.6939 & 0.6754 & 0.6846 & 0.0092 \\
+nhanes\_lead & 0.667 & 0.329 & 0.0246 & 0.2255 & 0.1250 & 0.1005 \\
+brfss\_diabetes & 1.000 & 0.656 & 0.1247 & 0.3300 & 0.2274 & 0.1027 \\
+acsfoodstamps & 1.000 & 0.719 & 0.1901 & 0.3935 & 0.2918 & 0.1017 \\
+physionet & 1.000 & 0.388 & 0.0119 & 0.4305 & 0.2212 & 0.2093 \\
+acsunemployment & 1.000 & 0.977 & 0.0341 & 0.1372 & 0.0856 & 0.0516 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

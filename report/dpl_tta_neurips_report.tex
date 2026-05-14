@@ -1,0 +1,335 @@
+\documentclass{article}
+
+\usepackage[preprint,nonatbib]{../Styles/neurips_2025}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+\title{Distribution-Guided Pseudo-Label Test-Time Adaptation for Tabular OOD Generalization}
+
+\author{Anonymous Author(s)}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Tabular out-of-distribution (OOD) generalization is important in real-world applications such as finance, healthcare, industrial inspection, and advertising, where deployment data often differ from training data. However, tabular data differ from images and text because their features are heterogeneous, semantically non-exchangeable, and often limited in scale, making standard test-time adaptation (TTA) methods difficult to transfer directly. In this report, we propose Distribution-guided Pseudo-Label Test-Time Adaptation (DPL-TTA), a conservative weakly supervised TTA method for binary tabular OOD generalization. DPL-TTA is target-label-free: it uses only unlabeled OOD features during adaptation, and OOD labels are used only for final evaluation. It is also source-prior-aware rather than prior-free: it stores the source label prior from labeled in-distribution training data and uses it to shrink a high-confidence target-prior estimate. This shrinkage target prior then controls the class composition of pseudo labels for test-time adaptation. The method updates only the classifier head and BatchNorm affine parameters with an anchor regularization term. Experiments on six TableShift datasets show that DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants. However, FT-Transformer remains the strongest overall baseline, and DPL-TTA does not consistently improve balanced accuracy. These results suggest that DPL-TTA is a conservative and interpretable MLP-based TTA strategy, but not a replacement for stronger tabular backbones.
+\end{abstract}
+
+\section{Introduction}
+
+Tabular data are widely used in high-stakes machine learning applications, including finance, healthcare, industrial inspection, and advertising. In these domains, models are often trained on data collected from one environment but deployed in another. For example, a clinical risk model trained on one hospital population may be evaluated on a different demographic group, and a financial decision model may face new market conditions after deployment. This creates an out-of-distribution (OOD) generalization problem: the test distribution may differ from the training distribution, while labeled target-domain data may be unavailable. Improving tabular OOD robustness is therefore practically important, especially when re-labeling target data is expensive, delayed, or impossible.
+
+OOD generalization for tabular data is challenging because tabular features differ substantially from images and text. Tabular inputs often mix continuous, categorical, sparse, and semantically heterogeneous variables. Unlike image pixels, tabular features are not exchangeable: each column has a fixed meaning, and simple transformations may change the semantics of the sample. In addition, tabular datasets are often smaller than large-scale vision or language datasets, which makes representation learning and distributional estimation less stable. These properties make it difficult to directly transfer test-time adaptation techniques designed for image classification, where augmentations, spatial invariances, or cluster assumptions are often more reliable.
+
+Test-time adaptation (TTA) is a natural direction for this setting because, at deployment time, one may observe unlabeled OOD target features even when target labels are unavailable. In this work, we follow this target-label-free protocol: OOD labels are not used for training, adaptation, or hyperparameter selection; they are used only once for final evaluation. However, naive TTA can be unstable for tabular data. Entropy minimization or threshold-based pseudo-labeling may reinforce the source model's bias under distribution shift. This is especially problematic when the label distribution changes between the source and target domains, because high-confidence predictions may reflect the source prior rather than the true target class composition.
+
+To address this issue, we propose Distribution-guided Pseudo-Label Test-Time Adaptation (DPL-TTA), a conservative weakly supervised TTA method for binary tabular OOD generalization. DPL-TTA first trains an ERM MLP on labeled in-distribution source data. At test time, it receives only unlabeled OOD features. It then estimates a conservative target prior from high-confidence target predictions and shrinks this estimate toward the source label prior. This makes DPL-TTA source-prior-aware rather than prior-free. The estimated prior is used to control the positive and negative pseudo-label budgets during adaptation. In contrast to vanilla pseudo-labeling, which only applies confidence thresholds, DPL-TTA explicitly constrains the pseudo-label class composition using the shrinkage target prior.
+
+The design of DPL-TTA is intentionally conservative. It updates only the classifier head and BatchNorm affine parameters, uses one adaptation step, and adds an anchor regularization term that penalizes deviation from the source model parameters. It also skips adaptation when the estimated prior shift is too small. These choices are motivated by the instability of tabular TTA: rather than assuming that every target batch provides a strong adaptation signal, DPL-TTA adapts only through a small, prior-guided pseudo-label set.
+
+Our contributions are as follows. First, we formulate DPL-TTA as a target-label-free, source-prior-aware TTA method for tabular OOD generalization. Second, we introduce distribution-guided pseudo-label selection, which uses a shrinkage estimate of the target label prior to control pseudo-label composition. Third, we evaluate DPL-TTA on six TableShift datasets under the official train, validation, and OOD test splits. The results show that DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants. At the same time, stronger tabular backbones remain important: FT-Transformer is the strongest overall baseline in our experiments. Therefore, we do not claim that DPL-TTA beats all baselines. Instead, our main finding is more modest: DPL-TTA provides a conservative and interpretable improvement over MLP-based TTA variants on macro OOD F1, while its balanced-accuracy gains are small and not consistently superior.
+
+% Suggested tables/figures for later sections:
+% Figure 1: Overview of DPL-TTA. It should show: source ERM MLP training,
+% unlabeled OOD feature input, high-confidence target prediction selection,
+% shrinkage target-prior estimation, distribution-guided pseudo-label selection,
+% and conservative test-time update.
+%
+% Table 1: Main macro OOD results. Columns should include:
+% Method, Backbone/Category, OOD Accuracy, OOD Balanced Accuracy,
+% OOD F1, and Balanced-Accuracy Generalization Gap.
+% This table should appear in Section 4 Experiments, not in the Introduction.
+
+\section{Related Work}
+
+\subsection{Tabular OOD Generalization and TableShift}
+
+Tabular OOD generalization studies how models trained on one tabular distribution perform under shifted test distributions. This problem is common in real applications because tabular datasets are often collected from different populations, institutions, time periods, or geographic regions. Compared with standard in-distribution evaluation, OOD evaluation better reflects deployment conditions, where the test population may not match the training population.
+
+TableShift provides a benchmark for evaluating tabular distribution shift with official train, validation, in-distribution test, and out-of-distribution test splits. This is important for reproducibility because it separates model selection from final OOD evaluation. In our protocol, all methods use the official splits. Hyperparameters are selected without using OOD labels, and OOD labels are used only for final evaluation. This distinction is crucial: using target labels during adaptation or model selection would turn the problem into a supervised or semi-supervised target-domain setting, which is not the setting studied in this report.
+
+A key challenge in TableShift-style evaluation is that performance degradation may come from multiple types of shift. Feature distributions may change, class priors may change, and the relationship between features and labels may also differ across domains. In binary classification, label distribution shift is particularly relevant because a model's predicted positive rate may reflect the source-domain label prior. If the target-domain prior differs, pseudo-label-based adaptation may over-select one class and degrade minority-class performance. This motivates our focus on source-prior-aware pseudo-label construction.
+
+\subsection{Test-Time Adaptation for Tabular Data}
+
+Test-time adaptation aims to modify a trained model at deployment time using unlabeled target-domain data. In vision tasks, common TTA strategies include entropy minimization, batch-normalization adaptation, augmentation consistency, and pseudo-labeling. However, these assumptions are less reliable for tabular data. First, tabular features do not usually admit label-preserving augmentations as naturally as images. Second, cluster assumptions may be weaker because tabular feature spaces mix heterogeneous variables with different semantics. Third, entropy minimization can be risky under label shift, because making predictions more confident does not guarantee that the confidence is assigned to the correct class distribution.
+
+Recent tabular TTA methods explore how to adapt models under these constraints. FTAT, AdapTable, and TabLog represent attempts to design adaptation strategies that are more suitable for tabular data. The common lesson from this literature is that tabular TTA must be more cautious than image TTA. Since target labels are unavailable, the adaptation objective can easily reinforce wrong predictions. This is especially concerning when pseudo labels are generated from a source model that is already biased under OOD shift.
+
+Our method follows this conservative perspective. DPL-TTA does not rely on tabular augmentations or assume that target samples form clean class clusters. Instead, it uses high-confidence predictions only to estimate a target prior and construct a controlled pseudo-label set. The actual parameter update is restricted to the classifier head and BatchNorm affine parameters. This makes the method less expressive than full-model adaptation, but it reduces the risk of destructive updates.
+
+\subsection{Label Distribution Shift and Source-Prior-Aware TTA}
+
+Label distribution shift occurs when the class prior changes between source and target domains. Under such shift, a classifier trained on source data may produce predictions whose class composition remains biased toward the source label distribution. This is harmful for pseudo-labeling because confidence thresholding alone may select many samples from the dominant source class, even when the target distribution differs. As a result, vanilla pseudo-label TTA can become aggressive: it may adapt to confident but poorly balanced pseudo labels.
+
+DPL-TTA addresses this issue by making pseudo-label selection explicitly distribution-guided. The method computes the source prior from labeled source training data and estimates a raw target prior from high-confidence unlabeled target predictions. It then forms a shrinkage estimate by interpolating between the raw target estimate and the source prior. This design is source-prior-aware: the source prior is intentionally used as a conservative anchor. Therefore, DPL-TTA should not be described as prior-free.
+
+This distinction separates DPL-TTA from stricter prior-free adaptation settings such as methods that avoid using source label-prior information at test time. Prior-free methods are attractive because they make fewer assumptions about the availability or validity of source-domain statistics. However, in our setting, the source training labels are available during source training, and the source prior can be stored without accessing OOD labels. We therefore study a more practical but less restrictive setting: DPL-TTA uses source prior information, but it remains target-label-free.
+
+Empirically, this positioning is important for interpreting the results. DPL-TTA is not intended to dominate all tabular baselines. In our experiments, FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1. Within MLP-based TTA variants, DPL-TTA achieves the best macro OOD F1, but it does not significantly improve balanced accuracy and does not beat all stronger backbones. This supports a conservative interpretation: DPL-TTA is a prior-guided pseudo-labeling strategy that improves one important metric within the MLP-TTA family, rather than a universal replacement for stronger tabular architectures.
+
+% Suggested related-work table, optional:
+% Table 2: Comparison of related adaptation settings. Columns should include:
+% Method/Family, Uses OOD Labels During Adaptation, Uses Source Labels or Source Prior,
+% Requires Tabular Augmentation, Updates Model at Test Time, and Main Assumption.
+% This table is optional and can be omitted if the report length is limited.
+
+\section{Methodology}
+
+\subsection{Problem Setup}
+
+We study binary tabular OOD generalization under a target-label-free test-time adaptation protocol. Let
+\[
+\mathcal{D}_s = \{(x_i^s, y_i^s)\}_{i=1}^{n_s}
+\]
+denote the labeled source training set, where $x_i^s$ is a tabular input and $y_i^s \in \{0,1\}$ is the binary label. Let
+\[
+\mathcal{D}_t^x = \{x_j^t\}_{j=1}^{n_t}
+\]
+denote the unlabeled target-domain OOD test features available at adaptation time. The corresponding OOD labels
+\[
+\mathcal{D}_t^y = \{y_j^t\}_{j=1}^{n_t}
+\]
+are not used for training, adaptation, pseudo-label construction, prior estimation, or hyperparameter selection. They are used only once for final evaluation.
+
+We first train a source model $f_{\theta_0}$ on $\mathcal{D}_s$ using empirical risk minimization. In this report, the main model family for test-time adaptation is an MLP-based binary classifier. Given an input $x$, the model outputs a logit $z_\theta(x)$ and a predicted positive probability
+\[
+p_\theta(y=1 \mid x) = \sigma(z_\theta(x)),
+\]
+where $\sigma(\cdot)$ is the sigmoid function.
+
+The goal of test-time adaptation is to obtain an adapted model $f_{\theta'}$ using only $\mathcal{D}_t^x$, while avoiding access to OOD labels. This protocol reflects practical deployment settings where unlabeled target samples may be available, but labels are unavailable, delayed, or too expensive to collect.
+
+\subsection{Source-Prior-Aware Target Prior Estimation}
+
+DPL-TTA is based on the observation that pseudo-labeling under OOD shift can be biased by the source label distribution. Therefore, instead of applying confidence thresholding alone, DPL-TTA first estimates a conservative target label prior and uses it to guide pseudo-label selection.
+
+The source positive prior is computed from labeled source training data:
+\[
+\pi_s = \frac{1}{n_s}\sum_{i=1}^{n_s} y_i^s.
+\]
+This quantity is stored after source training. Because it is computed only from source training labels, it does not violate the target-label-free protocol.
+
+At test time, the source model $f_{\theta_0}$ predicts probabilities on unlabeled OOD features:
+\[
+p_j = p_{\theta_0}(y=1 \mid x_j^t).
+\]
+DPL-TTA selects high-confidence target samples using a confidence threshold $\tau$:
+\[
+\mathcal{C} = \{j : p_j \geq \tau \ \text{or} \ p_j \leq 1-\tau\}.
+\]
+In the main configuration, $\tau=0.7$. The raw target prior is estimated as the average predicted positive probability over the high-confidence set:
+\[
+\pi_t^{\mathrm{raw}} = \frac{1}{|\mathcal{C}|}\sum_{j \in \mathcal{C}} p_j.
+\]
+Since high-confidence OOD predictions can still inherit source-model bias, DPL-TTA applies shrinkage toward the source prior:
+\[
+\pi_t = \beta \pi_t^{\mathrm{raw}} + (1-\beta)\pi_s,
+\]
+where $\beta=0.5$ in the main experiments.
+
+This design is deliberately conservative. DPL-TTA is not prior-free: it intentionally uses $\pi_s$ as a source-domain anchor. At the same time, it remains target-label-free because $\pi_t$ is estimated only from unlabeled target features and source-model predictions.
+
+DPL-TTA also includes a prior-shift gate. If the estimated prior shift is too small,
+\[
+|\pi_t - \pi_s| < \delta,
+\]
+then adaptation is skipped. In the main configuration, $\delta=0.03$. This gate prevents unnecessary updates when the estimated target label distribution is close to the source distribution.
+
+\subsection{Distribution-Guided Pseudo-Label Selection}
+
+The central difference between DPL-TTA and vanilla pseudo-labeling is how pseudo labels are selected. Vanilla pseudo-labeling uses only confidence thresholds:
+\[
+\hat{y}_j =
+\begin{cases}
+1, & p_j \geq \tau, \\
+0, & p_j \leq 1-\tau.
+\end{cases}
+\]
+This strategy may produce an imbalanced pseudo-label set whose class composition is determined only by the source model's confidence. Under label distribution shift, such a pseudo-label set may amplify source-prior bias.
+
+DPL-TTA instead uses the shrinkage target prior $\pi_t$ to control the positive and negative pseudo-label budgets. Let
+\[
+\mathcal{P} = \{j : p_j \geq \tau\}
+\]
+be the confident positive candidate set, and
+\[
+\mathcal{N} = \{j : p_j \leq 1-\tau\}
+\]
+be the confident negative candidate set. Let $m$ be the desired number of pseudo-labeled samples, set to the number of confident samples unless capped by a maximum pseudo-sample budget. DPL-TTA computes the desired number of positive pseudo labels as
+\[
+m_+ = \mathrm{round}(\pi_t m),
+\]
+and the desired number of negative pseudo labels as
+\[
+m_- = m - m_+.
+\]
+
+The method then selects the $m_+$ most confident positive candidates from $\mathcal{P}$ and the $m_-$ most confident negative candidates from $\mathcal{N}$. Positive samples are selected from the largest predicted probabilities, while negative samples are selected from the smallest predicted probabilities. The resulting pseudo-labeled target set is
+\[
+\hat{\mathcal{D}}_t =
+\{(x_j^t, 1): j \in \hat{\mathcal{P}}\}
+\cup
+\{(x_j^t, 0): j \in \hat{\mathcal{N}}\}.
+\]
+
+This distribution-guided selection mechanism makes DPL-TTA more conservative than threshold-only pseudo-labeling. It does not assume that all confident predictions should be used. Instead, it uses the estimated target prior to control the class composition of the pseudo-label set.
+
+\subsection{Conservative Test-Time Update}
+
+After constructing pseudo labels, DPL-TTA performs a small test-time update. The update scope is restricted to the classifier head and BatchNorm affine parameters. All other parameters are frozen by default. This restriction reduces the risk of large destructive updates on tabular data, where the adaptation signal may be noisy.
+
+The adaptation objective combines binary cross-entropy on pseudo labels with an anchor regularization term:
+\[
+\mathcal{L}_{\mathrm{DPL}}(\theta)
+=
+\mathrm{BCE}(f_\theta(x), \hat{y})
++
+\lambda
+\left\|
+\theta_{\mathrm{trainable}} -
+\theta_{0,\mathrm{trainable}}
+\right\|_2^2,
+\]
+where $\lambda$ is the anchor weight. In the main configuration, $\lambda=1.0$. The method uses one adaptation step with learning rate $10^{-4}$.
+
+The anchor term penalizes deviation from the source model. This is consistent with the overall goal of DPL-TTA: to adapt only when there is useful evidence from unlabeled OOD features, while keeping the update small and controlled. If no pseudo labels are selected, or if the prior-shift gate is not passed, DPL-TTA skips adaptation and evaluates the original source model.
+
+% Suggested Figure 1:
+% DPL-TTA overview.
+% The figure should contain the following blocks:
+% (1) source ERM MLP trained on labeled ID data;
+% (2) unlabeled OOD features passed through the source model;
+% (3) high-confidence sample selection;
+% (4) source-prior-aware shrinkage target-prior estimation;
+% (5) distribution-guided pseudo-label selection with positive/negative budgets;
+% (6) conservative update of classifier head and BN affine parameters;
+% (7) final OOD evaluation using OOD labels only for metrics.
+
+% Suggested Table 1:
+% DPL-TTA hyperparameters.
+% Columns:
+% Hyperparameter, Value, Role.
+% Rows:
+% confidence_threshold = 0.7;
+% beta = 0.5;
+% prior_shift_threshold = 0.03;
+% adapt_steps = 1;
+% lr = 1e-4;
+% anchor_weight = 1.0;
+% update_scope = head_bn_affine;
+% batch_size = 1024;
+% pseudo_label_strategy = distribution_guided.
+
+\section{Experiments}
+
+\subsection{Experimental Setup}
+
+We evaluate DPL-TTA on six binary classification datasets from the TableShift benchmark:
+\texttt{assistments}, \texttt{nhanes\_lead}, \texttt{brfss\_diabetes}, \texttt{acsfoodstamps}, \texttt{physionet}, and \texttt{acsunemployment}. All methods follow the official TableShift train, validation, in-distribution test, and OOD test splits. Hyperparameters are selected without using OOD labels.
+
+All reported results are averaged over three random seeds: $42$, $3407$, and $2004$. We report OOD accuracy, OOD balanced accuracy, OOD F1, and balanced-accuracy generalization gap. The generalization gap measures the difference between in-distribution and OOD performance, and is used to characterize robustness under distribution shift.
+
+The adaptation protocol is strictly target-label-free. For TTA methods, adaptation uses only unlabeled OOD features. OOD labels are not used for adaptation, training, pseudo-label construction, target-prior estimation, or hyperparameter selection. OOD labels are used only for final evaluation.
+
+\subsection{Baselines}
+
+We compare DPL-TTA with two groups of baselines.
+
+The first group contains MLP-based methods. These methods share the same source MLP backbone and are therefore the primary comparison group for evaluating the effect of test-time adaptation:
+\[
+\text{ERM-MLP}, \quad
+\text{Simple-TTA}, \quad
+\text{SafeGate-TTA}, \quad
+\text{Vanilla-PL-TTA}, \quad
+\text{DPL-TTA}.
+\]
+ERM-MLP is the source model without test-time adaptation. Simple-TTA and SafeGate-TTA are conservative MLP-based adaptation variants. Vanilla-PL-TTA uses confidence-based pseudo labels without target-prior control. DPL-TTA uses distribution-guided pseudo-label selection with a shrinkage target prior.
+
+The second group contains stronger tabular baselines:
+\[
+\text{XGBoost}, \quad \text{FT-Transformer}.
+\]
+These baselines are included to evaluate whether improvements from MLP-based TTA are competitive with stronger tabular modeling choices. The primary comparison for DPL-TTA is among MLP-based TTA variants, while XGBoost and FT-Transformer indicate the strength of alternative backbones.
+
+\subsection{Main Results}
+
+Table~\ref{tab:main_results} summarizes the macro OOD results over all six datasets. The main conclusion is that FT-Transformer is the strongest overall baseline, achieving the best macro OOD balanced accuracy and macro OOD F1. XGBoost is also a strong non-neural baseline and outperforms the MLP-based methods on macro OOD balanced accuracy and macro OOD F1.
+
+Within the MLP-based TTA variants, DPL-TTA achieves the best macro OOD F1. Specifically, DPL-TTA obtains a macro OOD F1 of $0.442267$, compared with $0.440841$ for ERM-MLP, $0.440222$ for Simple-TTA, $0.440324$ for SafeGate-TTA, and $0.440526$ for Vanilla-PL-TTA. This supports the claim that distribution-guided pseudo-labeling improves macro F1 within the MLP-based TTA family.
+
+However, DPL-TTA does not achieve the best macro OOD balanced accuracy. Vanilla-PL-TTA has a slightly higher macro OOD balanced accuracy than DPL-TTA, and both XGBoost and FT-Transformer outperform DPL-TTA on this metric. Therefore, we do not claim that DPL-TTA significantly improves balanced accuracy. We also do not claim that DPL-TTA beats all baselines. The more accurate interpretation is that DPL-TTA is a conservative MLP-based TTA method that improves macro OOD F1 among MLP-based TTA variants, while stronger tabular backbones remain better overall.
+
+\input{generated/main_results_table.tex}
+
+\begin{figure}[t]
+\centering
+\begin{minipage}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/results/figures/macro_ood_f1_by_method.png}\\[-0.5ex]
+  \small (a) Macro OOD F1.
+\end{minipage}\hfill
+\begin{minipage}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/results/figures/macro_ood_balanced_accuracy_by_method.png}\\[-0.5ex]
+  \small (b) Macro OOD balanced accuracy.
+\end{minipage}
+\caption{Macro OOD metrics by method. DPL-TTA has the strongest macro OOD F1 among MLP-based TTA variants, while FT-Transformer remains strongest overall.}
+\label{fig:macro_ood_metrics}
+\end{figure}
+
+\subsection{Per-Dataset Analysis and Diagnostics}
+
+Table~\ref{tab:per_dataset} reports per-dataset OOD balanced accuracy and F1. The per-dataset results show that DPL-TTA has small and dataset-dependent effects.
+
+On \texttt{assistments}, DPL-TTA skips adaptation because the estimated prior shift is small. The source prior is $0.6939$, the shrinkage target prior is $0.6846$, and the estimated prior shift is only $0.0092$, below the threshold $0.03$. As a result, DPL-TTA matches ERM-MLP on this dataset.
+
+On \texttt{nhanes\_lead}, DPL-TTA also produces the same OOD balanced accuracy and F1 as ERM-MLP, despite a larger estimated prior shift. This suggests that adaptation does not always translate into measurable performance improvement, especially when confident pseudo labels provide limited useful gradient signal.
+
+On \texttt{brfss\_diabetes}, DPL-TTA slightly decreases balanced accuracy compared with ERM-MLP, but improves F1 from $0.4910$ to $0.4933$. On \texttt{acsfoodstamps}, DPL-TTA slightly improves both balanced accuracy and F1 relative to ERM-MLP. On \texttt{physionet}, DPL-TTA improves F1 from $0.1781$ to $0.1824$, while Vanilla-PL-TTA obtains higher balanced accuracy but lower F1 than DPL-TTA. On \texttt{acsunemployment}, DPL-TTA slightly improves balanced accuracy but slightly decreases F1.
+
+These results indicate that DPL-TTA is not uniformly better across datasets or metrics. Its strongest support comes from macro OOD F1 among MLP-based TTA variants. The diagnostics also explain part of its behavior: DPL-TTA adapts conservatively, skips adaptation when estimated prior shift is small, and uses high-confidence target predictions to guide pseudo-label composition.
+
+\input{generated/per_dataset_table.tex}
+
+\input{generated/dpl_diagnostics_table.tex}
+
+\subsection{Ablation Study}
+
+We further evaluate DPL-TTA with ablations on \texttt{brfss\_diabetes}, \texttt{physionet}, and \texttt{acsunemployment}. The ablation results are shown in Table~\ref{tab:ablation}. We compare the full DPL-TTA method with three variants: removing the prior-shift gate, removing the anchor regularization term, and replacing distribution-guided pseudo-labeling with vanilla confidence-based pseudo-labeling.
+
+The results show that removing the prior-shift gate gives the same macro results as full DPL-TTA on these three datasets. This is expected because all three selected datasets have estimated prior shifts above the default gate threshold. Therefore, the gate does not change the adaptation decision in this subset.
+
+Removing the anchor term also has almost no effect. This does not mean the anchor is useless in general. In the current configuration, DPL-TTA uses only one adaptation step and a small learning rate, so parameter changes are already limited. The anchor term still serves as a conservative guard against larger updates, but its empirical effect is small in this setting.
+
+Vanilla pseudo-labeling obtains higher macro OOD balanced accuracy on the ablation subset, but lower macro OOD F1 than full DPL-TTA. This matches the main-result pattern: vanilla pseudo-labeling can be more aggressive and may improve balanced accuracy in some cases, but DPL-TTA gives better F1 within the MLP-based TTA comparison. Therefore, the ablation does not support the claim that every DPL component is essential, nor does it support the claim that DPL-TTA is best on all metrics. Instead, it supports a narrower conclusion: distribution-guided pseudo-labeling provides a conservative alternative to threshold-only pseudo-labeling and improves macro F1 in the studied MLP-based TTA setting.
+
+\input{generated/ablation_table.tex}
+
+% Suggested Table 5:
+% Per-dataset ablation table.
+% Columns:
+% Variant, Dataset, OOD BAcc, OOD F1, BAcc Delta vs Source.
+% This table can be placed in the appendix if the report has a page limit.
+
+\section{Conclusion}
+
+This report studied test-time adaptation for tabular OOD generalization and proposed DPL-TTA, a conservative distribution-guided pseudo-labeling method for binary tabular classification. DPL-TTA is designed for a target-label-free setting: during adaptation, it only uses unlabeled OOD features, while OOD labels are reserved only for final evaluation. The method is also explicitly source-prior-aware rather than prior-free. It stores the source label prior from labeled source training data, estimates a raw target prior from high-confidence unlabeled OOD predictions, and shrinks the target estimate toward the source prior. This shrinkage target prior is then used to control the positive and negative pseudo-label budgets for test-time adaptation.
+
+The empirical results support a modest but useful conclusion. Across six TableShift datasets, DPL-TTA achieves the best macro OOD F1 among MLP-based TTA variants. This suggests that distribution-guided pseudo-label selection can improve over threshold-only or simpler MLP-based adaptation strategies when evaluated by macro F1. However, the results also show that DPL-TTA is not the strongest method overall. FT-Transformer achieves the best macro OOD balanced accuracy and macro OOD F1, and XGBoost is also a strong non-neural baseline. Therefore, DPL-TTA should not be interpreted as beating all baselines. Rather, it is best understood as a conservative TTA improvement within the MLP-based adaptation family.
+
+The limitations of DPL-TTA are also clear. First, its gains are small and metric-dependent. It improves macro OOD F1 among MLP-based TTA variants, but it does not consistently improve balanced accuracy. Second, DPL-TTA depends on the quality of the source model's high-confidence predictions. If the source model is poorly calibrated under OOD shift, the estimated target prior may still inherit source-domain bias. Third, because DPL-TTA intentionally uses the source prior, it does not solve the stricter prior-free adaptation problem. Fourth, the conservative update design limits risk but also limits the amount of adaptation signal: updating only the classifier head and BatchNorm affine parameters with one adaptation step may be insufficient for larger or more complex distribution shifts.
+
+Future work could extend DPL-TTA in several directions. One direction is to combine distribution-guided pseudo-labeling with stronger tabular backbones such as FT-Transformer, since the current results suggest that backbone strength remains crucial. Another direction is to improve target-prior estimation, for example by using calibration-aware confidence filtering or more robust uncertainty estimates. A third direction is to extend the method beyond binary classification and evaluate whether source-prior-aware pseudo-label budgeting remains useful in multi-class tabular OOD settings. Overall, DPL-TTA provides an interpretable and conservative step toward tabular test-time adaptation, but its role is complementary to, rather than a replacement for, stronger tabular modeling methods.
+\end{document}
